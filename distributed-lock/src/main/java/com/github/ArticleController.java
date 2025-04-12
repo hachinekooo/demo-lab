@@ -77,8 +77,29 @@ public class ArticleController {
                 }
             } finally {
                 if (isLocked) { // 只有成功获取锁的线程才需要释放锁
-                    Long result = redisLuaUtil.cad(lockKey, lockID);
-                    log.info("释放锁 {} 结果: {}", LOCK_PREFIX + articleId, result);
+                    int releaseRetry = 0;
+                    Boolean releaseStatus = false;
+                    while (releaseRetry < 3 && !releaseStatus) {
+                        try {
+                            // 检查锁是否已过期
+                            if (redisClient.ttl(lockKey) < 0) {
+                                log.warn("锁已自动过期，无需释放");
+                                releaseStatus = true;
+                                break;
+                            }
+
+                            Long result = redisLuaUtil.cad(lockKey, lockID);
+                            releaseStatus = result != null && result > 0;
+                            log.info("释放锁 {} 结果: {}", LOCK_PREFIX + articleId, result);
+                        } catch (Exception e) {
+                            log.warn("释放锁异常，重试中...", e);
+                            Thread.sleep(100);
+                        }
+                        releaseRetry++;
+                    }
+                    if (!releaseStatus) {
+                        log.error("最终未能释放锁: {}", lockKey);
+                    }
                 }
             }
         }
