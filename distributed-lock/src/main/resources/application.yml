@@ -1,0 +1,15 @@
+spring:
+  redis:
+    host: localhost
+    port: 6379
+    password:
+
+cache:
+  lock:
+    maxRetry: 3
+    waitTime: 200
+
+prefix:
+  demo: demo_
+  lock: lock_
+  article: article_
