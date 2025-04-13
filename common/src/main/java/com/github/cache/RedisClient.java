@@ -140,7 +140,7 @@ public class RedisClient {
         });
     }
 
-    public void expire(String key, Long expire) {
+    public void expire(String key, Long expire, TimeUnit timeUnit) {
         template.execute((RedisCallback<Void>) connection -> {
             connection.expire(keyBytes(key), expire);
             return null;

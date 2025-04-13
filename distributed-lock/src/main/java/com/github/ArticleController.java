@@ -11,7 +11,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.annotation.PreDestroy;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -35,7 +39,12 @@ public class ArticleController {
     private final RedisClient redisClient;
     private final RedisLuaUtil redisLuaUtil;
 
+    private final ScheduledExecutorService watchdogExecutor = Executors.newSingleThreadScheduledExecutor();
 
+    @PreDestroy
+    public void shutdownWatchdog() {
+        watchdogExecutor.shutdownNow();
+    }
 
     @GetMapping("/queryById/{articleId}")
     public ApiResponse queryById(@PathVariable Long articleId) throws InterruptedException {
@@ -58,11 +67,14 @@ public class ArticleController {
 
             String lockKey = LOCK_PREFIX + articleId;
             String lockID = UUID.randomUUID().toString();
-            Boolean isLocked = redisClient.stringSetIfAbsentWithExpire(lockKey, lockID, 60L, TimeUnit.SECONDS); // 尝试获取锁
+            long lockTimeout = 60L;
+            Boolean isLocked = redisClient.stringSetIfAbsentWithExpire(lockKey, lockID, lockTimeout, TimeUnit.SECONDS); // 尝试获取锁
 
+            ScheduledFuture<?> watchDogFuture = null;
             try {
                 if (isLocked) { // 获取锁成功
                     log.info("线程 {} 获取分布式锁成功：{}", Thread.currentThread() ,LOCK_PREFIX + articleId);
+                    watchDogFuture = startWatchDog(lockKey, lockID, lockTimeout, TimeUnit.SECONDS);// 开启watchdog
 
                     String queryResult = selectById(articleId); // 查询数据库
 
@@ -77,28 +89,35 @@ public class ArticleController {
                 }
             } finally {
                 if (isLocked) { // 只有成功获取锁的线程才需要释放锁
-                    int releaseRetry = 0;
-                    Boolean releaseStatus = false;
-                    while (releaseRetry < 3 && !releaseStatus) {
-                        try {
-                            // 检查锁是否已过期
-                            if (redisClient.ttl(lockKey) < 0) {
-                                log.warn("锁已自动过期，无需释放");
-                                releaseStatus = true;
-                                break;
-                            }
+                    try {
+                        int releaseRetry = 0;
+                        boolean releaseStatus = false;
+                        while (releaseRetry < 3 && !releaseStatus) {
+                            try {
+                                // 检查锁是否已过期
+                                if (redisClient.ttl(lockKey) < 0) {
+                                    log.warn("锁已自动过期，无需释放");
+                                    releaseStatus = true;
+                                    break;
+                                }
 
-                            Long result = redisLuaUtil.cad(lockKey, lockID);
-                            releaseStatus = result != null && result > 0;
-                            log.info("释放锁 {} 结果: {}", LOCK_PREFIX + articleId, result);
-                        } catch (Exception e) {
-                            log.warn("释放锁异常，重试中...", e);
-                            Thread.sleep(100);
+                                Long result = redisLuaUtil.cad(lockKey, lockID);
+                                releaseStatus = result != null && result > 0;
+                                log.info("释放锁 {} 结果: {}", LOCK_PREFIX + articleId, result);
+                            } catch (Exception e) {
+                                log.warn("释放锁异常，重试中...", e);
+                                Thread.sleep(100);
+                            }
+                            releaseRetry++;
                         }
-                        releaseRetry++;
-                    }
-                    if (!releaseStatus) {
-                        log.error("最终未能释放锁: {}", lockKey);
+                        if (!releaseStatus) {
+                            log.error("最终未能释放锁: {}", lockKey);
+                        }
+                    } finally {
+                        if (watchDogFuture != null) {
+                            log.info("取消对锁{}的续约检查", lockKey);
+                            watchDogFuture.cancel(true); // 强制中断续约任务
+                        }
                     }
                 }
             }
@@ -107,9 +126,35 @@ public class ArticleController {
         return ApiResponse.error(0, "查询时失败");
     }
 
-    private static String selectById(Long articleId) throws InterruptedException {
+    private String selectById(Long articleId) throws InterruptedException {
         log.info("查询数据库。。。");
-        Thread.sleep(500); // 模拟数据库查询延迟
+        Thread.sleep(120_000); // 模拟数据库查询延迟
         return "保持谦虚，保持学习，脚踏实地，不好高骛远，先完成，再优化。";
+    }
+
+    private ScheduledFuture<?> startWatchDog(String lockKey, String lockId, long timeout, TimeUnit timeUnit) {
+        long interval = timeout * 2 / 3; // 60秒的锁，每40秒续约一次
+        log.info("启动 watchdog");
+        return watchdogExecutor.scheduleAtFixedRate(() -> {
+            try {
+                log.info("对锁{} 进行续约检查", lockKey);
+                Long ttl = redisClient.ttl(lockKey); // 获取锁的ttl
+                if (ttl == null) return;  // 锁已经被释放，没有续约的必要了
+
+                String lockIdInRedis = redisClient.stringGet(lockKey);
+                if (lockId.equals(lockIdInRedis)) {
+                    redisClient.expire(lockKey, timeout, timeUnit); // 给锁的ttl设置为 timeout秒
+                    log.info("锁续约成功，TTL重置为 {} {}", timeout, timeUnit);
+                } else {
+                    log.info("锁值不匹配，可能已释放或过期");
+                    throw new RuntimeException("锁已失效"); // 触发任务取消
+                }
+            } catch (Exception e) {
+                log.warn("锁续约异常", e);
+                throw e;
+            }
+
+        }, interval, interval, timeUnit);
+
     }
 }
