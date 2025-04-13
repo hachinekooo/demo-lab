@@ -18,6 +18,11 @@
     </properties>
 
     <dependencies>
+        <!-- WebSocket -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
         <!-- 公共基础模块 -->
         <dependency>
             <groupId>com.github</groupId>
