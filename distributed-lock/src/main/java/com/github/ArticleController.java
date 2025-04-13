@@ -138,17 +138,22 @@ public class ArticleController {
         return watchdogExecutor.scheduleAtFixedRate(() -> {
             try {
                 log.info("watchdog：对锁{} 进行续约检查", lockKey);
+
                 Long ttl = redisClient.ttl(lockKey); // 获取锁的ttl
-                if (ttl == null) return;  // 锁已经被释放，没有续约的必要了
+                if (ttl == null) {
+                    log.warn("watchdog：锁不存在或访问异常，取消续约任务");
+                    throw new RuntimeException("锁不存在"); // 触发任务取消
+                }
 
                 String lockIdInRedis = redisClient.stringGet(lockKey);
-                if (lockId.equals(lockIdInRedis)) {
-                    redisClient.expire(lockKey, timeout, timeUnit); // 给锁的ttl设置为 timeout秒
-                    log.info("watchdog：锁续约成功，TTL重置为 {} {}", timeout, timeUnit);
-                } else {
-                    log.info("watchdog：锁值不匹配，可能已释放或过期");
-                    throw new RuntimeException("watchdog：锁已失效"); // 触发任务取消
+                if (!lockId.equals(lockIdInRedis)) {
+                    log.warn("watchdog：锁值不匹配，可能已释放或过期");
+                    throw new RuntimeException("锁已失效");
                 }
+
+                // 续约操作
+                redisClient.expire(lockKey, timeout, timeUnit);
+                log.info("watchdog：锁续约成功，TTL重置为 {} {}", timeout, timeUnit);
             } catch (Exception e) {
                 log.warn("watchdog：锁续约异常", e);
                 throw e;
