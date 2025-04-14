@@ -30,8 +30,8 @@ public class ArticleController {
     @Value("${cache.lock.maxRetry:3}")
     private int MAX_RETRY_TIMES; // 最大自旋次数，防止无限循环
 
-    @Value("${cache.lock.waitTime:200}")
-    private long lockWaitTime; // 自旋等待时间
+    @Value("${cache.lock.sleepTime:200}")
+    private long sleepTime; // 睡眠休息时间
 
     @Value("${prefix.lock:lock_}")
     private String LOCK_PREFIX;
@@ -93,7 +93,7 @@ public class ArticleController {
                 } else { // 获取锁失败，自旋重试
                     log.info("获取分布式锁 {} 失败，正在进行第 {} 次重试", LOCK_PREFIX + articleId,retryTimes + 1);
                     retryTimes++;
-                    Thread.sleep(lockWaitTime); // 等待一段时间再重试
+                    Thread.sleep(sleepTime); // 等待一段时间再重试
                 }
             } finally {
                 if (isLocked) { // 只有成功获取锁的线程才需要释放锁
