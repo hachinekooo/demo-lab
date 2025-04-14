@@ -7,7 +7,9 @@ spring:
 cache:
   lock:
     maxRetry: 3
-    waitTime: 200
+    sleepTime: 200
+    waitTime: 1
+    leaseTime: 30
 
 prefix:
   demo: demo_

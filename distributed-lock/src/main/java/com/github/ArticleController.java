@@ -74,6 +74,14 @@ public class ArticleController {
             try {
                 if (isLocked) { // 获取锁成功
                     log.info("线程 {} 获取分布式锁成功：{}", Thread.currentThread() ,LOCK_PREFIX + articleId);
+
+                    // 再次检查缓存，防止其他线程已经填充了缓存
+                    String cachedArticle = redisClient.stringGet(ARTICLE_PREFIX + articleId);
+                    if (cachedArticle != null) {
+                        log.info("双重检查缓存命中，直接返回");
+                        return ApiResponse.success(cachedArticle);
+                    }
+
                     watchDogFuture = startWatchDog(lockKey, lockID, lockTimeout, TimeUnit.SECONDS);// 开启watchdog
 
                     String queryResult = selectById(articleId); // 查询数据库
