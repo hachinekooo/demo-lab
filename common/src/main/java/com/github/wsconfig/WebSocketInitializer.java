@@ -1,5 +1,5 @@
 // src/main/java/com/github/config/WebSocketInitializer.java
-package com.github.config;
+package com.github.wsconfig;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;

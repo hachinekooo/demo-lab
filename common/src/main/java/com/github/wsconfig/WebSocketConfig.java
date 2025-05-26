@@ -1,5 +1,5 @@
 // src/main/java/com/github/config/WebSocketConfig.java
-package com.github.config;
+package com.github.wsconfig;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;

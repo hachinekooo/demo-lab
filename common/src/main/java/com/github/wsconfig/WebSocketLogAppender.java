@@ -1,5 +1,4 @@
-// src/main/java/com/github/config/WebSocketLogAppender.java
-package com.github.config;
+package com.github.wsconfig;
 
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.AppenderBase;

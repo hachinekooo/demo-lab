@@ -4,6 +4,7 @@ spring:
     port: 6379
     password:
 
+
 cache:
   lock:
     maxRetry: 3
@@ -15,3 +16,5 @@ prefix:
   demo: demo_
   lock: lock_
   article: article_
+server:
+  port: 8080

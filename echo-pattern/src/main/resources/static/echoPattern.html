@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>实时日志控制台</title>
+    <script src="/js/sockjs.min.js"></script>
+    <script src="/js/stomp.min.js"></script>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+            background-color: #1e1e1e;
+            color: #e0e0e0;
+        }
+
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            margin-bottom: 10px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        #logs {
+            background-color: #252525;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 15px;
+            height: 500px;
+            overflow-y: auto;
+            font-size: 14px;
+            line-height: 1.5;
+            white-space: pre;
+            font-family: 'Courier New', monospace;
+        }
+
+        #logs::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #logs::-webkit-scrollbar-track {
+            background: #2d2d2d;
+        }
+
+        #logs::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 4px;
+        }
+
+        #logs::-webkit-scrollbar-thumb:hover {
+            background: #777;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            word-break: break-all;
+        }
+
+        .log-time {
+            color: #569cd6;
+        }
+
+        .log-info {
+            color: #b5cea8;
+        }
+
+        .log-warn {
+            color: #ce9178;
+        }
+
+        .log-error {
+            color: #f48771;
+        }
+
+        .log-debug {
+            color: #9cdcfe;
+        }
+    </style>
+</head>
+<body>
+<h2>回响模式演示控制台</h2>
+<button onclick="callApi()">调用接口</button>
+<div id="logs"></div>
+
+<script>
+    let stompClient = null;
+    const sessionId = generateSessionId();
+
+    function connect() {
+        const socket = new SockJS('/ws-logs');
+        stompClient = Stomp.over(socket);
+
+        stompClient.connect({}, function(frame) {
+            console.log('Connected: ' + frame);
+            addSystemLog('WebSocket连接已建立', 'info');
+
+            stompClient.subscribe('/topic/logs', function(message) {
+                showLog(message.body);
+            });
+        }, function(error) {
+            addSystemLog('连接错误: ' + error, 'error');
+        });
+    }
+
+    function disconnect() {
+        if (stompClient !== null) {
+            stompClient.disconnect();
+            addSystemLog('WebSocket连接已断开', 'info');
+        }
+    }
+
+    function showLog(rawMessage) {
+        try {
+            // 尝试解析日志级别
+            let logClass = 'log-info';
+            if (rawMessage.includes('WARN')) logClass = 'log-warn';
+            if (rawMessage.includes('ERROR')) logClass = 'log-error';
+            if (rawMessage.includes('DEBUG')) logClass = 'log-debug';
+
+            // 提取时间戳
+            const timeMatch = rawMessage.match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}/);
+            const logTime = timeMatch ? timeMatch[0] : new Date().toISOString();
+
+            // 提取实际日志内容
+            const content = rawMessage.replace(/^.*\] /, '');
+
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.innerHTML = `
+                <span class="log-time">[${logTime}]</span>
+                <span class="${logClass}">${content}</span>
+            `;
+
+            document.getElementById('logs').appendChild(logEntry);
+            scrollToBottom();
+        } catch (e) {
+            addSystemLog('日志解析错误: ' + e, 'error');
+        }
+    }
+
+    function addSystemLog(message, level = 'info') {
+        const logEntry = document.createElement('div');
+        logEntry.className = 'log-entry';
+        logEntry.innerHTML = `
+            <span class="log-time">[${new Date().toISOString()}]</span>
+            <span class="log-${level}">${message}</span>
+        `;
+        document.getElementById('logs').appendChild(logEntry);
+        scrollToBottom();
+    }
+
+    function scrollToBottom() {
+        const logsElement = document.getElementById('logs');
+        logsElement.scrollTop = logsElement.scrollHeight;
+    }
+
+    function callApi() {
+        const payload = {
+            id: 123,
+            name: "张三",
+            email: "zhangsan@example.com"
+        };
+
+        addSystemLog('调用接口: /api-access-test/api/test', 'info');
+
+        fetch('/api-access-test/api/test', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Response data:', data);
+            })
+            .catch(err => {
+                addSystemLog('接口调用错误: ' + err, 'error');
+            });
+    }
+
+
+    function generateSessionId() {
+        return 'session_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    // 页面加载时自动连接
+    window.onload = function() {
+        addSystemLog('初始化控制台...', 'info');
+        connect();
+    };
+
+    // 页面关闭时断开连接
+    window.onbeforeunload = function() {
+        disconnect();
+    };
+</script>
+</body>
+</html>

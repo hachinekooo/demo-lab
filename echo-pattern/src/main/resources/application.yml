@@ -1,0 +1,4 @@
+prefix:
+  demo: demo_
+server:
+  port: 8081

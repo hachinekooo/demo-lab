@@ -11,6 +11,8 @@
     <modules>
         <module>distributed-lock</module>
         <module>common</module>
+        <module>dynamic-config-refresh</module>
+        <module>echo-pattern</module>
     </modules>
 
     <properties>
