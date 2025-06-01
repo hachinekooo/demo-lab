@@ -1,0 +1,5 @@
+test:
+  config:
+    name: MyApplication
+    version: 2
+    enabled: true

@@ -3,6 +3,7 @@ package com.github;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.PropertyEditorRegistry;
+import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.BindHandler;
 import org.springframework.boot.context.properties.bind.Bindable;
@@ -26,6 +27,7 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.PropertySources;
 import org.springframework.stereotype.Component;
+import java.lang.reflect.Field;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -33,7 +35,7 @@ import java.util.function.Consumer;
 
 @Slf4j
 @Component
-public class DynamicConfigManager implements EnvironmentAware, ApplicationContextAware {
+public class DynamicConfigManager implements EnvironmentAware, ApplicationContextAware, CommandLineRunner {
 
     private static final String DYNAMIC_CONFIG_PROPERTY_SOURCE_NAME = "dynamic-config";
 
@@ -45,23 +47,91 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
 
     private PropertySources propertySources;
 
-    private Map<String, Object> configs = new HashMap<>();
-    
-    public void warpAndAddPropertySource() {
-        // 将配置源包装为适用于 Spring Environment 的 PropertySource 类型
-        MapPropertySource dynConfPropertySource = new MapPropertySource(DYNAMIC_CONFIG_PROPERTY_SOURCE_NAME, configs);
-        // 将配置源添加到 environment 中，使用 addFirst 确保优先级最高
-        environment.getPropertySources().addFirst(dynConfPropertySource);
+    private Map<String, Object> dynamicConfigs = new HashMap<>();
+
+    public boolean loadConfigFromDb() {
+        log.info("====================== Loading configuration from database ======================");
+        log.info("Starting to fetch dynamic configuration...");
+
+        try {
+            Thread.sleep(3000);
+        } catch (InterruptedException e) {
+            log.error("Thread interrupted while loading config", e);
+        }
+
+        HashMap<String, Object> hashMap = new HashMap<>();
+        hashMap.put("test.config.name", "ApplicationName_DB");
+        hashMap.put("test.config.version", 2);
+        hashMap.put("test.config.enabled", true);
+
+        if (!hashMap.isEmpty()) {
+            dynamicConfigs = hashMap;
+            log.info("Successfully loaded {} configuration properties:", dynamicConfigs.size());
+            dynamicConfigs.forEach((key, value) ->
+                    log.info("  {} = {} ({})", key, value, value.getClass().getSimpleName())
+            );
+            log.info("Configuration loading completed successfully");
+            return true;
+        }
+
+        log.warn("No configuration found in database");
+        return false;
     }
 
-    public void findPropertyClassAndRebind() {
+    public void addPropertySource() {
+        log.info("====================== Adding property source ======================");
+        log.info("Creating MapPropertySource with name: {}", DYNAMIC_CONFIG_PROPERTY_SOURCE_NAME);
+
+        MapPropertySource dynConfPropertySource = new MapPropertySource(DYNAMIC_CONFIG_PROPERTY_SOURCE_NAME, dynamicConfigs);
+        environment.getPropertySources().addFirst(dynConfPropertySource);
+
+        log.info("Property source added with highest priority");
+        log.info("Current property sources count: {}", environment.getPropertySources().size());
+    }
+
+    public void rebind() {
+        log.info("====================== Rebinding configuration properties ======================");
         Map<String, Object> beansWithAnnotation = applicationContext.getBeansWithAnnotation(ConfigurationProperties.class);
-        beansWithAnnotation.values().forEach(bean -> {
-            Bindable<?> bindable =
-                    Bindable.ofInstance(bean)
-                            .withAnnotations(AnnotationUtils.findAnnotation(bean.getClass(), ConfigurationProperties.class));
-            bind(bindable);
+
+        log.info("Found {} beans with @ConfigurationProperties annotation", beansWithAnnotation.size());
+
+        beansWithAnnotation.forEach((beanName, bean) -> {
+            ConfigurationProperties annotation = AnnotationUtils.findAnnotation(bean.getClass(), ConfigurationProperties.class);
+            if (annotation != null) {
+                log.info("--- Processing bean: {} with prefix: {} ---", beanName, annotation.prefix());
+
+                // 打印重新绑定前的配置值
+                printCurrentBeanProperties(beanName, bean, "BEFORE rebinding");
+
+                // 执行重新绑定
+                Bindable<?> bindable = Bindable.ofInstance(bean).withAnnotations(annotation);
+                bind(bindable);
+
+                // 打印重新绑定后的配置值
+                printCurrentBeanProperties(beanName, bean, "AFTER rebinding");
+            }
         });
+
+        log.info("Configuration rebinding completed");
+    }
+
+    private void printCurrentBeanProperties(String beanName, Object bean, String stage) {
+        log.info("=== {} - {} ===", stage, beanName);
+        try {
+            // 使用反射获取所有字段
+            Field[] fields = bean.getClass().getDeclaredFields();
+            for (Field field : fields) {
+                field.setAccessible(true);
+                Object value = field.get(bean);
+                log.info("  {}: {} ({})",
+                        field.getName(),
+                        value,
+                        value != null ? value.getClass().getSimpleName() : "null"
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Failed to read properties for bean: {}, error: {}", beanName, e.getMessage());
+        }
     }
 
     private <T> void bind(Bindable<T> bindable) {
@@ -144,5 +214,13 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
                     .getBeanFactory()::copyRegisteredEditorsTo;
         }
         return null;
+    }
+
+    // 在 Spring Boot 完全启动后才执行在 Spring Boot 完全启动后才执行
+    @Override
+    public void run(String... args) throws Exception {
+        loadConfigFromDb();
+        addPropertySource();
+        rebind();
     }
 }
