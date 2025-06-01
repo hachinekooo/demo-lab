@@ -4,11 +4,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.PropertyEditorRegistry;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.BindHandler;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.bind.PropertySourcesPlaceholdersResolver;
+import org.springframework.boot.context.properties.bind.handler.IgnoreErrorsBindHandler;
+import org.springframework.boot.context.properties.bind.handler.IgnoreTopLevelConverterNotFoundBindHandler;
+import org.springframework.boot.context.properties.bind.handler.NoUnboundElementsBindHandler;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySource;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
+import org.springframework.boot.context.properties.source.UnboundElementsSourceFilter;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -40,7 +45,6 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
 
     private PropertySources propertySources;
 
-
     private Map<String, Object> configs = new HashMap<>();
     
     public void warpAndAddPropertySource() {
@@ -50,20 +54,35 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
         environment.getPropertySources().addFirst(dynConfPropertySource);
     }
 
-    public void findPropertyClass() {
+    public void findPropertyClassAndRebind() {
         Map<String, Object> beansWithAnnotation = applicationContext.getBeansWithAnnotation(ConfigurationProperties.class);
         beansWithAnnotation.values().forEach(bean -> {
-            Bindable<Object> bindable =
+            Bindable<?> bindable =
                     Bindable.ofInstance(bean)
                             .withAnnotations(AnnotationUtils.findAnnotation(bean.getClass(), ConfigurationProperties.class));
             bind(bindable);
         });
     }
 
-    private void bind(Bindable bindable) {
-
+    private <T> void bind(Bindable<T> bindable) {
+        ConfigurationProperties annotation = bindable.getAnnotation(ConfigurationProperties.class);
+        if (annotation != null) {
+            BindHandler bindHandler = getBindHandler(annotation);
+            getBinder().bind(annotation.prefix(), bindable, bindHandler);
+        }
     }
 
+    private BindHandler getBindHandler(ConfigurationProperties annotation) {
+        BindHandler handler = new IgnoreTopLevelConverterNotFoundBindHandler();
+        if (annotation.ignoreInvalidFields()) { // 如果在配置属性时发现目标对象中有无效字段，则忽略这些无效字段
+            handler = new IgnoreErrorsBindHandler(handler);
+        }
+        if (!annotation.ignoreUnknownFields()) { // 如果在配置属性时发现目标对象中有未知字段，则忽略这些未知字段
+            UnboundElementsSourceFilter filter = new UnboundElementsSourceFilter();
+            handler = new NoUnboundElementsBindHandler(handler, filter);
+        }
+        return handler;
+    }
 
     @Override
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
@@ -75,6 +94,9 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
         this.environment = (ConfigurableEnvironment) environment;
         this.propertySources = ((ConfigurableEnvironment) environment).getPropertySources();
     }
+
+
+    // ================================= 初始化 Spring Binder =============================
 
     /**
      * @return 初始化 Spring Binder 对象
