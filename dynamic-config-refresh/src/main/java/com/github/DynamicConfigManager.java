@@ -1,5 +1,6 @@
 package com.github;
 
+import cn.hutool.json.JSONUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.PropertyEditorRegistry;
@@ -27,7 +28,6 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.PropertySources;
 import org.springframework.stereotype.Component;
-import java.lang.reflect.Field;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -49,8 +49,17 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
 
     private Map<String, Object> dynamicConfigs = new HashMap<>();
 
+    public void reloadConfig() {
+        String before = JSONUtil.toJsonStr(dynamicConfigs);
+        boolean toRefresh = loadConfigFromDb();
+        if (toRefresh) {
+            rebind();
+            log.info("配置刷新! 旧:{}, 新:{}", before, JSONUtil.toJsonStr(dynamicConfigs));
+        }
+    }
+
     public boolean loadConfigFromDb() {
-        log.info("====================== Loading configuration from database ======================");
+        log.info("====================== Loading configuration from database ======================\n");
         log.info("Starting to fetch dynamic configuration...");
 
         try {
@@ -58,6 +67,8 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
         } catch (InterruptedException e) {
             log.error("Thread interrupted while loading config", e);
         }
+
+        dynamicConfigs.clear();
 
         HashMap<String, Object> hashMap = new HashMap<>();
         hashMap.put("test.config.name", "ApplicationName_DB");
@@ -79,18 +90,20 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
     }
 
     public void addPropertySource() {
-        log.info("====================== Adding property source ======================");
+        log.info("====================== Adding property source ======================\n");
         log.info("Creating MapPropertySource with name: {}", DYNAMIC_CONFIG_PROPERTY_SOURCE_NAME);
+
+        int preSize = environment.getPropertySources().size();
 
         MapPropertySource dynConfPropertySource = new MapPropertySource(DYNAMIC_CONFIG_PROPERTY_SOURCE_NAME, dynamicConfigs);
         environment.getPropertySources().addFirst(dynConfPropertySource);
 
         log.info("Property source added with highest priority");
-        log.info("Current property sources count: {}", environment.getPropertySources().size());
+        log.info("Current property sources count: {} -> {}", preSize, environment.getPropertySources().size());
     }
 
     public void rebind() {
-        log.info("====================== Rebinding configuration properties ======================");
+        log.info("====================== Rebinding configuration properties ======================\n");
         Map<String, Object> beansWithAnnotation = applicationContext.getBeansWithAnnotation(ConfigurationProperties.class);
 
         log.info("Found {} beans with @ConfigurationProperties annotation", beansWithAnnotation.size());
@@ -98,41 +111,15 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
         beansWithAnnotation.forEach((beanName, bean) -> {
             ConfigurationProperties annotation = AnnotationUtils.findAnnotation(bean.getClass(), ConfigurationProperties.class);
             if (annotation != null) {
-                log.info("--- Processing bean: {} with prefix: {} ---", beanName, annotation.prefix());
-
-                // 打印重新绑定前的配置值
-                printCurrentBeanProperties(beanName, bean, "BEFORE rebinding");
-
                 // 执行重新绑定
                 Bindable<?> bindable = Bindable.ofInstance(bean).withAnnotations(annotation);
                 bind(bindable);
-
-                // 打印重新绑定后的配置值
-                printCurrentBeanProperties(beanName, bean, "AFTER rebinding");
             }
         });
 
         log.info("Configuration rebinding completed");
     }
 
-    private void printCurrentBeanProperties(String beanName, Object bean, String stage) {
-        log.info("=== {} - {} ===", stage, beanName);
-        try {
-            // 使用反射获取所有字段
-            Field[] fields = bean.getClass().getDeclaredFields();
-            for (Field field : fields) {
-                field.setAccessible(true);
-                Object value = field.get(bean);
-                log.info("  {}: {} ({})",
-                        field.getName(),
-                        value,
-                        value != null ? value.getClass().getSimpleName() : "null"
-                );
-            }
-        } catch (Exception e) {
-            log.warn("Failed to read properties for bean: {}, error: {}", beanName, e.getMessage());
-        }
-    }
 
     private <T> void bind(Bindable<T> bindable) {
         ConfigurationProperties annotation = bindable.getAnnotation(ConfigurationProperties.class);
