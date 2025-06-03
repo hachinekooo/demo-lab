@@ -8,8 +8,6 @@ public class TestConfigProperties {
     private int version;
     private boolean enabled;
 
-    // Getters and Setters
-
     public String getName() {
         return name;
     }

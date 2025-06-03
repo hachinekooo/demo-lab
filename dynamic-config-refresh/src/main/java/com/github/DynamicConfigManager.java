@@ -3,36 +3,28 @@ package com.github;
 import cn.hutool.json.JSONUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeansException;
-import org.springframework.beans.PropertyEditorRegistry;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.bind.BindHandler;
 import org.springframework.boot.context.properties.bind.Bindable;
-import org.springframework.boot.context.properties.bind.Binder;
-import org.springframework.boot.context.properties.bind.PropertySourcesPlaceholdersResolver;
-import org.springframework.boot.context.properties.bind.handler.IgnoreErrorsBindHandler;
-import org.springframework.boot.context.properties.bind.handler.IgnoreTopLevelConverterNotFoundBindHandler;
-import org.springframework.boot.context.properties.bind.handler.NoUnboundElementsBindHandler;
-import org.springframework.boot.context.properties.source.ConfigurationPropertySource;
-import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
-import org.springframework.boot.context.properties.source.UnboundElementsSourceFilter;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
-import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.EnvironmentAware;
 import org.springframework.core.annotation.AnnotationUtils;
-import org.springframework.core.convert.ConversionService;
-import org.springframework.core.convert.support.DefaultConversionService;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.MapPropertySource;
-import org.springframework.core.env.PropertySources;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Consumer;
 
+/**
+ * 动态配置管理器，负责拉取配置、封装配置与调用绑定器
+ *
+ * @author wangwenpeng
+ * @date 2025/06/03
+ */
 @Slf4j
 @Component
 public class DynamicConfigManager implements EnvironmentAware, ApplicationContextAware, CommandLineRunner {
@@ -43,11 +35,10 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
 
     private ApplicationContext applicationContext;
 
-    private volatile Binder binder;
-
-    private PropertySources propertySources;
-
     private Map<String, Object> dynamicConfigs = new HashMap<>();
+
+    @Autowired
+    private DynamicConfigBinder dynamicConfigBinder;
 
     public void reloadConfig() {
         String before = JSONUtil.toJsonStr(dynamicConfigs);
@@ -68,8 +59,9 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
             log.error("Thread interrupted while loading config", e);
         }
 
-        dynamicConfigs.clear();
+        dynamicConfigs.clear(); // 先清空
 
+        // 再从数据库拉取，这里使用模拟数据
         HashMap<String, Object> hashMap = new HashMap<>();
         hashMap.put("test.config.name", "ApplicationName_DB");
         hashMap.put("test.config.version", 2);
@@ -113,32 +105,11 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
             if (annotation != null) {
                 // 执行重新绑定
                 Bindable<?> bindable = Bindable.ofInstance(bean).withAnnotations(annotation);
-                bind(bindable);
+                dynamicConfigBinder.bind(bindable);
             }
         });
 
         log.info("Configuration rebinding completed");
-    }
-
-
-    private <T> void bind(Bindable<T> bindable) {
-        ConfigurationProperties annotation = bindable.getAnnotation(ConfigurationProperties.class);
-        if (annotation != null) {
-            BindHandler bindHandler = getBindHandler(annotation);
-            getBinder().bind(annotation.prefix(), bindable, bindHandler);
-        }
-    }
-
-    private BindHandler getBindHandler(ConfigurationProperties annotation) {
-        BindHandler handler = new IgnoreTopLevelConverterNotFoundBindHandler();
-        if (annotation.ignoreInvalidFields()) { // 如果在配置属性时发现目标对象中有无效字段，则忽略这些无效字段
-            handler = new IgnoreErrorsBindHandler(handler);
-        }
-        if (!annotation.ignoreUnknownFields()) { // 如果在配置属性时发现目标对象中有未知字段，则忽略这些未知字段
-            UnboundElementsSourceFilter filter = new UnboundElementsSourceFilter();
-            handler = new NoUnboundElementsBindHandler(handler, filter);
-        }
-        return handler;
     }
 
     @Override
@@ -149,61 +120,13 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
     @Override
     public void setEnvironment(Environment environment) {
         this.environment = (ConfigurableEnvironment) environment;
-        this.propertySources = ((ConfigurableEnvironment) environment).getPropertySources();
     }
 
 
-    // ================================= 初始化 Spring Binder =============================
-
-    /**
-     * @return 初始化 Spring Binder 对象
-     */
-    private Binder getBinder() {
-        if (this.binder == null) {
-            synchronized (this) {
-                if (this.binder == null) {
-                    this.binder = new Binder(
-                            getConfigurationPropertySources(),
-                            getPropertySourcesPlaceholdersResolver(),
-                            getConversionService(),
-                            getPropertyEditorInitializer());
-                }
-            }
-        }
-        return this.binder;
-    }
-
-    private Iterable<ConfigurationPropertySource> getConfigurationPropertySources() {
-        return ConfigurationPropertySources.from(this.propertySources);
-    }
-
-    /**
-     * 指定占位符的前缀、后缀、默认值分隔符、未解析忽略、环境变量容器
-     *
-     * @return
-     */
-    private PropertySourcesPlaceholdersResolver getPropertySourcesPlaceholdersResolver() {
-        return new PropertySourcesPlaceholdersResolver(this.propertySources);
-    }
-
-    /**
-     * 类型转换
-     *
-     * @return
-     */
-    private ConversionService getConversionService() {
-        return new DefaultConversionService();
-    }
-
-    private Consumer<PropertyEditorRegistry> getPropertyEditorInitializer() {
-        if (this.applicationContext instanceof ConfigurableApplicationContext) {
-            return ((ConfigurableApplicationContext) this.applicationContext)
-                    .getBeanFactory()::copyRegisteredEditorsTo;
-        }
-        return null;
-    }
-
-    // 在 Spring Boot 完全启动后才执行在 Spring Boot 完全启动后才执行
+    /*
+    * 在 Spring Boot 完全启动后才执行在 Spring Boot 完全启动后才执行
+    * yaml 中的默认值得以保留，作为默认值使用
+    * */
     @Override
     public void run(String... args) throws Exception {
         loadConfigFromDb();
