@@ -40,7 +40,9 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
 
     private ApplicationContext applicationContext;
 
-    private Map<String, Object> dynamicConfigs = new HashMap<>();
+    private Map<String, Object> dynamicConfigs = new HashMap<>(); // 配置信息缓存
+
+    private Map<Class, Runnable> refreshCallBack = new HashMap<>(); // 回调任务
 
     @Autowired
     private DynamicConfigBinder dynamicConfigBinder;
@@ -123,14 +125,28 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
 
 
         if (group == null) {  // 全量刷新
-            beansWithAnnotation.values().forEach(this::rebindBean);
+            beansWithAnnotation.values().forEach(bean -> {
+                rebindBean(bean);
+                // 如果该 Bean 的类在 refreshCallback 中有对应的回调任务，则执行该回调任务
+                executeCallback(bean);
+            });
         } else { // 部分刷新
             beansWithAnnotation.values().stream()
                     .filter(bean -> Objects.equals(bean.getClass().getSimpleName(), group))
-                    .forEach(this::rebindBean);
+                    .forEach(bean1 -> {
+                        rebindBean(bean1);
+                        // 如果该 Bean 的类在 refreshCallback 中有对应的回调任务，则执行该回调任务
+                        executeCallback(bean1);
+                    });
         }
 
         log.info("Configuration rebinding completed");
+    }
+
+    private void executeCallback(Object bean) {
+        if (refreshCallBack.containsKey(bean.getClass())) {
+            refreshCallBack.get(bean.getClass()).run();
+        }
     }
 
     private void rebindBean(Object bean) {
@@ -140,6 +156,10 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
             Bindable<?> bindable = Bindable.ofInstance(bean).withAnnotations(annotation);
             dynamicConfigBinder.bind(bindable);
         }
+    }
+
+    public void registerRefreshCallback(Object bean, Runnable run) {
+        refreshCallBack.put(bean.getClass(), run);
     }
 
     @Override

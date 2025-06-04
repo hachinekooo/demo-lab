@@ -77,4 +77,15 @@ public class ConfigController {
             return globalConfMapper.selectByGroup(group);
         }
     }
+
+    @GetMapping("/register-callback")
+    public String registerCallbackTest() {
+        dynamicConfigManager.registerRefreshCallback(testConfigProperties, new Runnable() {
+            @Override
+            public void run() {
+                System.out.println("The callback mission of configuration class 'testConfigProperties' has been successfully invoked. ");
+            }
+        });
+        return "register callback successfully!";
+    }
 }
