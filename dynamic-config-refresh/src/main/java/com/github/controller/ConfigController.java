@@ -1,11 +1,18 @@
 package com.github.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.github.config.TestConfigProperties;
-import com.github.service.DynamicConfigManager;
+import com.github.controller.dto.GlobalConfAddDTO;
+import com.github.controller.dto.GlobalConfUpdateDTO;
+import com.github.controller.vo.GlobalConfVO;
+import com.github.dynamic.DynamicConfigManager;
+import com.github.mapper.GlobalConfMapper;
+import com.github.model.GlobalConfDO;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 
+import javax.validation.Valid;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +25,8 @@ public class ConfigController {
     private TestConfigProperties testConfigProperties;
     @Autowired
     private DynamicConfigManager dynamicConfigManager;
+    @Autowired
+    private GlobalConfMapper globalConfMapper;
 
     @GetMapping("/refresh")
     public String refreshConfig(@RequestParam String group) {
@@ -29,47 +38,43 @@ public class ConfigController {
     public Map<String, Object> getCurrentConfig() {
         Map<String, Object> configMap = new HashMap<>();
         configMap.put("name", testConfigProperties.getName());
-        configMap.put("age", testConfigProperties.getVersion());
+        configMap.put("version", testConfigProperties.getVersion());
         configMap.put("enabled", testConfigProperties.isEnabled());
         return configMap;
     }
 
     // 新增的配置管理接口
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
-
     @PostMapping("/add")
-    public String addConfig(@RequestParam String key, 
-                           @RequestParam String value, 
-                           @RequestParam(required = false) String group,
-                           @RequestParam(required = false) String comment) {
-        String sql = "INSERT INTO global_conf (`key`, `value`, `group`, `comment`) VALUES (?, ?, ?, ?)";
-        jdbcTemplate.update(sql, key, value, group, comment);
-        return "Configuration added successfully!";
+    public String addConfig(@RequestBody @Valid GlobalConfAddDTO dto) {
+        GlobalConfDO conf = new GlobalConfDO();
+        BeanUtils.copyProperties(dto, conf);
+        conf.setDeleted(0);
+        globalConfMapper.insert(conf);
+        dynamicConfigManager.reloadConfig(conf.getConfGroup());
+        return "Added";
     }
 
     @PutMapping("/update")
-    public String updateConfig(@RequestParam String key, 
-                              @RequestParam String value, 
-                              @RequestParam(required = false) String group,
-                              @RequestParam(required = false) String comment) {
-        String sql = "UPDATE global_conf SET `value` = ?, `group` = ?, `comment` = ?, `version` = `version` + 1 WHERE `key` = ?";
-        jdbcTemplate.update(sql, value, group, comment, key);
+    public String updateConfig(@RequestBody @Valid GlobalConfUpdateDTO dto) {
+        LambdaQueryWrapper<GlobalConfDO> wrapper =
+                new LambdaQueryWrapper<GlobalConfDO>().eq(GlobalConfDO::getConfKey, dto.getConfKey());
+        GlobalConfDO conf = globalConfMapper.selectOne(wrapper);
+        if (conf != null) {
+            conf.setConfValue(dto.getConfValue());
+            globalConfMapper.updateById(conf);
+
+            String confGroup = conf.getConfGroup();
+            dynamicConfigManager.reloadConfig(confGroup);
+        }
         return "Configuration updated successfully!";
     }
 
-    @DeleteMapping("/delete")
-    public String deleteConfig(@RequestParam String key) {
-        String sql = "UPDATE global_conf SET deleted = 1 WHERE `key` = ?";
-        jdbcTemplate.update(sql, key);
-        return "Configuration marked as deleted successfully!";
-    }
-
     @GetMapping("/list")
-    public List<Map<String, Object>> listConfigs(@RequestParam(required = false) String group) {
-        String sql = group == null ? 
-            "SELECT `key`, `value`, `group`, `comment`, `version` FROM global_conf WHERE deleted = 0" :
-            "SELECT `key`, `value`, `group`, `comment`, `version` FROM global_conf WHERE deleted = 0 AND `group` = ?";
-        return jdbcTemplate.queryForList(sql, group);
+    public List<GlobalConfVO> listConfigs(@RequestParam(required = false) String group) {
+        if (group == null) {
+            return globalConfMapper.selectAllValid();
+        } else {
+            return globalConfMapper.selectByGroup(group);
+        }
     }
 }

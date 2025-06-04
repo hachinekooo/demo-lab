@@ -1,0 +1,18 @@
+package com.github.controller.dto;
+
+import lombok.Data;
+
+import javax.validation.constraints.NotBlank;
+
+@Data
+public class GlobalConfAddDTO {
+    @NotBlank
+    private String confKey;
+
+    @NotBlank
+    private String confValue;
+
+    private String confGroup;
+
+    private String comment;
+}

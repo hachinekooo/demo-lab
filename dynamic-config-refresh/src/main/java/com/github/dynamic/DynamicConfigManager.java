@@ -1,7 +1,9 @@
-package com.github.service;
+package com.github.dynamic;
 
-import cn.hutool.extra.spring.SpringUtil;
 import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.github.mapper.GlobalConfMapper;
+import com.github.model.GlobalConfDO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,7 +17,6 @@ import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.MapPropertySource;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -43,6 +44,8 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
 
     @Autowired
     private DynamicConfigBinder dynamicConfigBinder;
+    @Autowired
+    private GlobalConfMapper globalConfMapper;
 
     public void reloadConfig(String group) {
         if (group == null) {
@@ -69,21 +72,16 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
         log.info("====================== Loading configuration from database ======================\n");
         log.info("Starting to fetch dynamic configuration...");
 
-        String sql = targetGroup != null ?
-                "SELECT `key`, `value`, `group`FROM global_conf WHERE `group` = ? AND deleted = 0" :
-                "SELECT `key`, `value`, `group` FROM global_conf WHERE deleted = 0";
-
-        List<Map<String, Object>> list = targetGroup != null ?
-                SpringUtil.getBean(JdbcTemplate.class).queryForList(sql, targetGroup) :
-                SpringUtil.getBean(JdbcTemplate.class).queryForList(sql);
+        List<GlobalConfDO> list;
+        if (targetGroup == null) {
+            list = globalConfMapper.selectList(null);
+        } else {
+            list = globalConfMapper.selectList(new LambdaQueryWrapper<GlobalConfDO>().eq(GlobalConfDO::getConfGroup, targetGroup));
+        }
 
         Map<String, Object> newConfigs = new HashMap<>();
-        for (Map<String, Object> row : list) {
-            String key = (String) row.get("key");
-            String value = (String) row.get("value");
-            newConfigs.put(key, value);
-
-            String group = (String) row.get("group");
+        for (GlobalConfDO conf : list) {
+            newConfigs.put(conf.getConfKey(), conf.getConfValue());
         }
 
         // 如果 targetGroup 为null（全量加载），且拉取到的配置信息不为空
@@ -125,30 +123,23 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
 
 
         if (group == null) {  // 全量刷新
-            beansWithAnnotation.forEach((beanName, bean) -> {
-                ConfigurationProperties annotation = AnnotationUtils.findAnnotation(bean.getClass(), ConfigurationProperties.class);
-                if (annotation != null) {
-                    // 执行重新绑定
-                    Bindable<?> bindable = Bindable.ofInstance(bean).withAnnotations(annotation);
-                    dynamicConfigBinder.bind(bindable);
-                }
-            });
+            beansWithAnnotation.values().forEach(this::rebindBean);
         } else { // 部分刷新
-            for (Map.Entry<String, Object> entry : beansWithAnnotation.entrySet()) {
-                Object bean = entry.getValue(); // bean 对象
-                String className = bean.getClass().getSimpleName();
-
-                if (Objects.equals(className, group)) {
-                    ConfigurationProperties annotation = AnnotationUtils.findAnnotation(bean.getClass(), ConfigurationProperties.class);
-                    if (annotation != null) {
-                        Bindable<?> bindable = Bindable.ofInstance(bean).withAnnotations(annotation);
-                        dynamicConfigBinder.bind(bindable);
-                    }
-                }
-            }
+            beansWithAnnotation.values().stream()
+                    .filter(bean -> Objects.equals(bean.getClass().getSimpleName(), group))
+                    .forEach(this::rebindBean);
         }
 
         log.info("Configuration rebinding completed");
+    }
+
+    private void rebindBean(Object bean) {
+        ConfigurationProperties annotation = AnnotationUtils.findAnnotation(bean.getClass(), ConfigurationProperties.class);
+        if (annotation != null) {
+            // 执行重新绑定
+            Bindable<?> bindable = Bindable.ofInstance(bean).withAnnotations(annotation);
+            dynamicConfigBinder.bind(bindable);
+        }
     }
 
     @Override
