@@ -9,9 +9,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.BeanFactoryAware;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.EnvironmentAware;
@@ -39,7 +39,7 @@ import java.util.*;
 @Slf4j
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)  // 添加这行确保最高优先级
-public class ValueAnnotationProcessor implements ApplicationContextAware, BeanFactoryAware, CommandLineRunner, EnvironmentAware {
+public class ValueAnnotationProcessor implements ApplicationContextAware, BeanFactoryAware, InitializingBean, EnvironmentAware {
 
     private ApplicationContext applicationContext;
 
@@ -198,15 +198,14 @@ public class ValueAnnotationProcessor implements ApplicationContextAware, BeanFa
         log.info("Current property sources count: {} -> {}", preSize, environment.getPropertySources().size());
     }
 
-
-    @Override
-    public void run(String... args) throws Exception {
-        loadConfigFromDb(null);
-        addPropertySource();
-    }
-
     @Override
     public void setEnvironment(Environment environment) {
         this.environment = (ConfigurableEnvironment) environment;
+    }
+
+    @Override
+    public void afterPropertiesSet() throws Exception {
+        loadConfigFromDb(null);
+        addPropertySource();
     }
 }

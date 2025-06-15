@@ -9,6 +9,7 @@ import com.github.dynamic.DynamicConfigManager;
 import com.github.dynamic.ValueAnnotationProcessor;
 import com.github.mapper.GlobalConfMapper;
 import com.github.mapper.model.GlobalConfDO;
+import com.github.service.UserService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -30,6 +31,9 @@ public class ConfigController {
     private GlobalConfMapper globalConfMapper;
     @Autowired
     private ValueAnnotationProcessor valueAnnotationProcessor;
+
+    @Autowired
+    private UserService userService;
 
     @GetMapping("/refresh")
     public String refreshConfig(@RequestParam String group) {
@@ -79,6 +83,11 @@ public class ConfigController {
         } else {
             return globalConfMapper.selectByGroup(group);
         }
+    }
+
+    @GetMapping("/getName")
+    public String getName() {
+        return userService.getName();
     }
 
     @GetMapping("/register-callback")
