@@ -16,7 +16,7 @@ public class PropertyValueElement extends ValueMetadata.ValueElement implements 
 
     private ConfigurableListableBeanFactory beanFactory;
 
-    protected PropertyValueElement(Field field) {
+    public PropertyValueElement(Field field) {
         super(field);
     }
 
