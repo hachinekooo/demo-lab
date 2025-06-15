@@ -72,6 +72,7 @@ public class ConfigController {
 
             String confGroup = conf.getConfGroup();
             dynamicConfigManager.reloadConfig(confGroup);
+            valueAnnotationProcessor.processValueInject(confGroup);
         }
         return "Configuration updated successfully!";
     }

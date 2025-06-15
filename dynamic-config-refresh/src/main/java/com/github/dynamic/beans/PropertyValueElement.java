@@ -1,9 +1,6 @@
 package com.github.dynamic.beans;
 
-import org.springframework.beans.BeansException;
 import org.springframework.beans.TypeConverter;
-import org.springframework.beans.factory.BeanFactory;
-import org.springframework.beans.factory.BeanFactoryAware;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.config.DependencyDescriptor;
 import org.springframework.util.ReflectionUtils;
@@ -12,12 +9,13 @@ import java.lang.reflect.Field;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
-public class PropertyValueElement extends ValueMetadata.ValueElement implements BeanFactoryAware {
+public class PropertyValueElement extends ValueMetadata.ValueElement {
 
     private ConfigurableListableBeanFactory beanFactory;
 
-    public PropertyValueElement(Field field) {
+    public PropertyValueElement(Field field, ConfigurableListableBeanFactory beanFactory) {
         super(field);
+        this.beanFactory = beanFactory;
     }
 
     @Override
@@ -49,6 +47,9 @@ public class PropertyValueElement extends ValueMetadata.ValueElement implements 
         desc.setContainingClass(bean.getClass());
 
         // 3.搞一个 Spring 的类型转换器
+        if (beanFactory == null) {
+            throw new IllegalStateException("BeanFactory is not initialized");
+        }
         TypeConverter converter = beanFactory.getTypeConverter();
 
         /*
@@ -63,10 +64,5 @@ public class PropertyValueElement extends ValueMetadata.ValueElement implements 
         valueObj = beanFactory.resolveDependency(desc, beanName, autowiredBeanNames, converter);
 
         return valueObj;
-    }
-
-    @Override
-    public void setBeanFactory(BeanFactory beanFactory) throws BeansException {
-        this.beanFactory = (ConfigurableListableBeanFactory) beanFactory;
     }
 }

@@ -12,6 +12,7 @@ import org.springframework.beans.factory.BeanFactoryAware;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.EnvironmentAware;
@@ -41,6 +42,8 @@ import java.util.*;
 @Order(Ordered.HIGHEST_PRECEDENCE)  // 添加这行确保最高优先级
 public class ValueAnnotationProcessor implements ApplicationContextAware, BeanFactoryAware, InitializingBean, EnvironmentAware {
 
+    private ConfigurableListableBeanFactory beanFactory;
+
     private ApplicationContext applicationContext;
 
     private final Set<Class<? extends Annotation>> autowiredAnnotationTypes = new LinkedHashSet<>(4);
@@ -69,7 +72,7 @@ public class ValueAnnotationProcessor implements ApplicationContextAware, BeanFa
                     }
 
                     // 如果有 @Value 注解，包装 成 ValueElement 放入 list
-                    PropertyValueElement propertyValueElement = new PropertyValueElement(field);
+                    PropertyValueElement propertyValueElement = new PropertyValueElement(field, beanFactory);
                     currElements.add(propertyValueElement);
                 }
 
@@ -138,6 +141,7 @@ public class ValueAnnotationProcessor implements ApplicationContextAware, BeanFa
 
     @Override
     public void setBeanFactory(BeanFactory beanFactory) throws BeansException {
+        this.beanFactory = (ConfigurableListableBeanFactory) beanFactory;
     }
 
     // ============================= 拉取配置，添加配置源，后期抽离出来做成单独的工具 ====================
