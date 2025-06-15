@@ -6,6 +6,7 @@ import com.github.controller.dto.GlobalConfAddDTO;
 import com.github.controller.dto.GlobalConfUpdateDTO;
 import com.github.controller.vo.GlobalConfVO;
 import com.github.dynamic.DynamicConfigManager;
+import com.github.dynamic.ValueAnnotationProcessor;
 import com.github.mapper.GlobalConfMapper;
 import com.github.mapper.model.GlobalConfDO;
 import org.springframework.beans.BeanUtils;
@@ -27,6 +28,8 @@ public class ConfigController {
     private DynamicConfigManager dynamicConfigManager;
     @Autowired
     private GlobalConfMapper globalConfMapper;
+    @Autowired
+    private ValueAnnotationProcessor valueAnnotationProcessor;
 
     @GetMapping("/refresh")
     public String refreshConfig(@RequestParam String group) {
