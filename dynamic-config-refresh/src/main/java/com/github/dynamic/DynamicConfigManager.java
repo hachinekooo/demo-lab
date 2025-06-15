@@ -3,7 +3,7 @@ package com.github.dynamic;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.github.mapper.GlobalConfMapper;
-import com.github.model.GlobalConfDO;
+import com.github.mapper.model.GlobalConfDO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;

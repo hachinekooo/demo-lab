@@ -1,4 +1,4 @@
-package com.github.model;
+package com.github.mapper.model;
 
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;

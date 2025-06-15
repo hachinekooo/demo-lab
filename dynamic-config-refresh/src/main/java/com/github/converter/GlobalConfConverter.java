@@ -1,7 +1,7 @@
 package com.github.converter;
 
 import com.github.controller.vo.GlobalConfVO;
-import com.github.model.GlobalConfDO;
+import com.github.mapper.model.GlobalConfDO;
 import org.springframework.beans.BeanUtils;
 
 import java.util.List;

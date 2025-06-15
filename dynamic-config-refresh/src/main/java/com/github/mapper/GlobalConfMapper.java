@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.github.controller.vo.GlobalConfVO;
 import com.github.converter.GlobalConfConverter;
-import com.github.model.GlobalConfDO;
+import com.github.mapper.model.GlobalConfDO;
 
 import java.util.List;
 

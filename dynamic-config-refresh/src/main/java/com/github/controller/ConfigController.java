@@ -7,7 +7,7 @@ import com.github.controller.dto.GlobalConfUpdateDTO;
 import com.github.controller.vo.GlobalConfVO;
 import com.github.dynamic.DynamicConfigManager;
 import com.github.mapper.GlobalConfMapper;
-import com.github.model.GlobalConfDO;
+import com.github.mapper.model.GlobalConfDO;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
