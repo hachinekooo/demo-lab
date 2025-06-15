@@ -19,12 +19,17 @@ public class ValueMetadata {
     /**
      * 处理注入
      *
-     * @param target
-     * @param beanName
+     * @param target 目标类
+     * @param beanName 目标类对应的 bean 名称
      * @throws Throwable
      */
     public void processInject(Object target, String beanName) throws Throwable {
         // 遍历 valueElements 、逐个调用 inject()
+        if (!valueElements.isEmpty()) {
+            for (ValueElement valueElement : valueElements) {
+                valueElement.inject(target,beanName);
+            }
+        }
     }
 
     public ValueMetadata(Class<?> targetClass, Collection<ValueElement> injectedElements) {
