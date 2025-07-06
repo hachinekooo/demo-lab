@@ -1,10 +1,10 @@
 package com.github.dynamic;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import cn.hutool.json.JSONUtil;
 import com.github.dynamic.beans.PropertyValueElement;
 import com.github.dynamic.beans.ValueMetadata;
 import com.github.mapper.GlobalConfMapper;
-import com.github.mapper.model.GlobalConfDO;
+import com.github.utils.ConfigUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.BeanFactory;
@@ -22,7 +22,6 @@ import org.springframework.core.annotation.MergedAnnotations;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.Environment;
-import org.springframework.core.env.MapPropertySource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ReflectionUtils;
 
@@ -144,62 +143,44 @@ public class ValueAnnotationProcessor implements ApplicationContextAware, BeanFa
         this.beanFactory = (ConfigurableListableBeanFactory) beanFactory;
     }
 
-    // ============================= 拉取配置，添加配置源，后期抽离出来做成单独的工具 ====================
-
     private ConfigurableEnvironment environment;
 
     private Map<String, Object> dynamicConfigs = new HashMap<>(); // 配置信息缓存
 
-    private static final String DYNAMIC_CONFIG_PROPERTY_SOURCE_NAME = "dynamic-config";
-
     @Autowired
     private GlobalConfMapper globalConfMapper;
 
-    public boolean loadConfigFromDb(String targetGroup) {
-        log.info("====================== Loading configuration from database ======================\n");
-        log.info("Starting to fetch dynamic configuration...");
-
-        List<GlobalConfDO> list;
-        if (targetGroup == null) {
-            list = globalConfMapper.selectList(null);
+    public void reloadConfig(String group) {
+        if (group == null) {
+            String before = JSONUtil.toJsonStr(dynamicConfigs);
+            boolean isUpdated = loadConfigFromDb(null);
+            if (isUpdated) { // 配置信息有更新，才需要重新绑定
+                addPropertySource();
+                processValueInject(null);
+                log.info("全量配置刷新! 旧:{}, 新:{}", before, JSONUtil.toJsonStr(dynamicConfigs));
+            }
         } else {
-            list = globalConfMapper.selectList(new LambdaQueryWrapper<GlobalConfDO>().eq(GlobalConfDO::getConfGroup, targetGroup));
+            String before = JSONUtil.toJsonStr(dynamicConfigs);
+            boolean isUpdated = loadConfigFromDb(group);
+            if (isUpdated) {
+                processValueInject(group);
+                log.info("增量配置刷新! 旧:{}, 新:{}", before, JSONUtil.toJsonStr(dynamicConfigs));
+            }
         }
+    }
 
-        Map<String, Object> newConfigs = new HashMap<>();
-        for (GlobalConfDO conf : list) {
-            newConfigs.put(conf.getConfKey(), conf.getConfValue());
-        }
 
-        // 如果 targetGroup 为null（全量加载），且拉取到的配置信息不为空
-        if (targetGroup == null && !newConfigs.isEmpty()) {
-            dynamicConfigs = newConfigs;
-            log.info("Successfully loaded {} configuration properties:", dynamicConfigs.size());
-            return true;
-        }
+    public boolean loadConfigFromDb(String targetGroup) {
+        Map<String, Object> newConfigs = ConfigUtils.loadConfigFromDb(globalConfMapper, targetGroup);
 
-        // 如果 targetGroup 不为null（部分加载），且拉取到的配置信息不为空
-        if (targetGroup != null && !newConfigs.isEmpty()) {
-            // 更新 dynamicConfigs 中相应的配置项
-            dynamicConfigs.putAll(newConfigs);
-            return true;
-        }
+        // 如果配置没有发生变化，则直接返回 false
+        if (!ConfigUtils.hasConfigChanged(dynamicConfigs, newConfigs)) { return false; }
 
-        log.warn("No configuration found in database");
-        return false;
+        return ConfigUtils.updateConfigs(targetGroup, newConfigs, dynamicConfigs);
     }
 
     public void addPropertySource() {
-        log.info("====================== Adding property source ======================\n");
-        log.info("Creating MapPropertySource with name: {}", DYNAMIC_CONFIG_PROPERTY_SOURCE_NAME);
-
-        int preSize = environment.getPropertySources().size();
-
-        MapPropertySource dynConfPropertySource = new MapPropertySource(DYNAMIC_CONFIG_PROPERTY_SOURCE_NAME, dynamicConfigs);
-        environment.getPropertySources().addFirst(dynConfPropertySource);
-
-        log.info("Property source added with highest priority");
-        log.info("Current property sources count: {} -> {}", preSize, environment.getPropertySources().size());
+        ConfigUtils.addPropertySource(environment, dynamicConfigs);
     }
 
     @Override
@@ -209,7 +190,6 @@ public class ValueAnnotationProcessor implements ApplicationContextAware, BeanFa
 
     @Override
     public void afterPropertiesSet() throws Exception {
-        loadConfigFromDb(null);
-        addPropertySource();
+        reloadConfig(null);
     }
 }

@@ -12,6 +12,7 @@ public class GlobalConfAddDTO {
     @NotBlank
     private String confValue;
 
+    @NotBlank
     private String confGroup;
 
     private String comment;

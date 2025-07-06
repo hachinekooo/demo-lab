@@ -45,4 +45,5 @@
   - 属性类的动态刷新
   - @Value 注解的动态刷新
 - **测试方式**
+  - http://localhost:8080/dynamicConfig.html
 

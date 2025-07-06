@@ -57,7 +57,10 @@ public class ConfigController {
         BeanUtils.copyProperties(dto, conf);
         conf.setDeleted(0);
         globalConfMapper.insert(conf);
-        dynamicConfigManager.reloadConfig(conf.getConfGroup());
+
+        String confGroup = conf.getConfGroup();
+        dynamicConfigManager.reloadConfig(confGroup);
+        valueAnnotationProcessor.reloadConfig(confGroup);
         return "Added";
     }
 
@@ -72,7 +75,7 @@ public class ConfigController {
 
             String confGroup = conf.getConfGroup();
             dynamicConfigManager.reloadConfig(confGroup);
-            valueAnnotationProcessor.processValueInject(confGroup);
+            valueAnnotationProcessor.reloadConfig(confGroup);
         }
         return "Configuration updated successfully!";
     }
