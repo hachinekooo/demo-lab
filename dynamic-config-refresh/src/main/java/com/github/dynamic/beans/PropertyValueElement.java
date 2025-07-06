@@ -37,9 +37,7 @@ public class PropertyValueElement extends ValueMetadata.ValueElement {
     @Override
     protected Object resolveFieldValue(Field field, Object bean, String beanName) {
         /*
-        * 1.创建依赖描述符，包装字段信息
-        * 对于 @Value 来说，required 直接设置为 true 就可以，
-        * 因为它压根就没法设置是否必须
+        * 1.创建依赖描述符，包装字段信息，描述这个字段的依赖关系
         * */
         DependencyDescriptor desc = new DependencyDescriptor(field, true);
 

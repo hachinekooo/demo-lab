@@ -174,7 +174,7 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
 
 
     /*
-    * 在 Spring Boot 完全启动后才执行在 Spring Boot 完全启动后才执行
+    * 在所有bean创建完成并且应用上下文完全设置好之后执行此方法。在Spring应用的run方法完成之前执行
     * yaml 中的默认值得以保留，作为默认值使用
     * */
     @Override
