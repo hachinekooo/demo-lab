@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>动态配置演示控制台</title>
+    <script src="/js/sockjs.min.js"></script>
+    <script src="/js/stomp.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #4CAF50;
+            --primary-hover: #45a049;
+            --bg-color: #1e1e1e;
+            --panel-bg: #252525;
+            --border-color: #333;
+            --text-color: #e0e0e0;
+            --info-color: #b5cea8;
+            --warn-color: #ce9178;
+            --error-color: #f48771;
+            --time-color: #569cd6;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h2 {
+            color: var(--primary-color);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            background-color: var(--panel-bg);
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .panel h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: var(--primary-color);
+            font-size: 1.1em;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        input, textarea {
+            padding: 8px 12px;
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            border-radius: 4px;
+            min-width: 200px;
+            flex: 1;
+        }
+
+        button {
+            padding: 8px 16px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        button.secondary {
+            background-color: #555;
+        }
+
+        button.secondary:hover {
+            background-color: #666;
+        }
+
+        #logs {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 15px;
+            height: 500px;
+            overflow-y: auto;
+            font-size: 14px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+        }
+
+        .log-entry {
+            margin-bottom: 8px;
+            word-break: break-word;
+            line-height: 1.5;
+        }
+
+        .log-time {
+            color: var(--time-color);
+            margin-right: 8px;
+        }
+
+        .log-info {
+            color: var(--info-color);
+        }
+
+        .log-warn {
+            color: var(--warn-color);
+        }
+
+        .log-error {
+            color: var(--error-color);
+        }
+
+        .divider {
+            height: 1px;
+            background-color: var(--border-color);
+            margin: 15px 0;
+        }
+
+        .config-tip {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            background-color: rgba(206, 145, 120, 0.1);
+            border-radius: 4px;
+            border-left: 3px solid var(--warn-color);
+        }
+
+        .tip-icon {
+            color: var(--warn-color);
+            font-size: 1.2em;
+        }
+
+        .tip-text {
+            color: var(--warn-color);
+            font-size: 0.9em;
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>动态配置演示控制台</h2>
+
+    <div class="panel">
+        <h3>配置查询</h3>
+        <div class="form-row">
+            <button onclick="getCurrentConfig()">获取当前配置</button>
+            <button onclick="listConfigs()">列出所有配置</button>
+        </div>
+        <div class="form-row">
+            <input type="text" id="configGroup" placeholder="输入配置组名(可选)">
+            <button onclick="listConfigsByGroup()">按组查询</button>
+        </div>
+        <div class="form-row">
+            <div class="config-tip">
+                <span class="tip-icon">ℹ️</span>
+                <span class="tip-text">需先在表中配置: key=dyn.user.name, value=hachinekooo, group=user</span>
+                <button onclick="getName()">获取用户名</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h3>配置操作</h3>
+        <div class="form-group">
+            <div class="form-row">
+                <input type="text" id="refreshGroup" placeholder="输入配置组名" required>
+                <button onclick="refreshConfig()">手动刷新配置</button>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="form-group">
+            <h4>添加新配置</h4>
+            <div class="form-row">
+                <input type="text" id="addKey" placeholder="配置键" required>
+                <input type="text" id="addValue" placeholder="配置值" required>
+            </div>
+            <div class="form-row">
+                <input type="text" id="addGroup" placeholder="配置组(可选)">
+                <input type="text" id="addComment" placeholder="备注(可选)">
+                <button onclick="addConfig()">添加配置</button>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="form-group">
+            <h4>更新配置</h4>
+            <div class="form-row">
+                <input type="text" id="updateKey" placeholder="配置键" required>
+                <input type="text" id="updateValue" placeholder="新配置值" required>
+                <button onclick="updateConfig()">更新配置</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h3>高级功能</h3>
+        <div class="form-row">
+            <button onclick="registerCallback()">注册testConfigProperties的回调任务（注册后需要手动触发刷新）</button>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h3>操作日志</h3>
+        <div id="logs"></div>
+    </div>
+</div>
+
+<script>
+    let stompClient = null;
+
+    function connect() {
+        const socket = new SockJS('/ws-logs');
+        stompClient = Stomp.over(socket);
+
+        stompClient.connect({}, function(frame) {
+            addSystemLog('WebSocket连接已建立', 'info');
+            stompClient.subscribe('/topic/logs', function(message) {
+                showLog(message.body);
+            });
+        }, function(error) {
+            addSystemLog('连接错误: ' + error, 'error');
+        });
+    }
+
+    function showLog(rawMessage) {
+        try {
+            const logClass = rawMessage.includes('ERROR') ? 'log-error' :
+                           rawMessage.includes('WARN') ? 'log-warn' : 'log-info';
+
+            const timeMatch = rawMessage.match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}/);
+            const logTime = timeMatch ? timeMatch[0] : new Date().toISOString();
+
+            const content = rawMessage.replace(/^.*\] /, '');
+
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.innerHTML = `
+                <span class="log-time">[${logTime}]</span>
+                <span class="${logClass}">${content}</span>
+            `;
+
+            document.getElementById('logs').appendChild(logEntry);
+            scrollToBottom();
+        } catch (e) {
+            addSystemLog('日志解析错误: ' + e, 'error');
+        }
+    }
+
+    function addSystemLog(message, level = 'info') {
+        const logEntry = document.createElement('div');
+        logEntry.className = 'log-entry';
+        logEntry.innerHTML = `
+            <span class="log-time">[${new Date().toISOString()}]</span>
+            <span class="log-${level}">${message}</span>
+        `;
+        document.getElementById('logs').appendChild(logEntry);
+        scrollToBottom();
+    }
+
+    function scrollToBottom() {
+        const logsElement = document.getElementById('logs');
+        logsElement.scrollTop = logsElement.scrollHeight;
+    }
+
+    // API调用函数
+    function getCurrentConfig() {
+        fetch('/config/current')
+            .then(response => response.json())
+            .then(data => addSystemLog('当前配置: ' + JSON.stringify(data), 'info'))
+            .catch(err => addSystemLog('获取配置错误: ' + err, 'error'));
+    }
+
+    function listConfigs() {
+        fetch('/config/list')
+            .then(response => response.json())
+            .then(data => addSystemLog('所有配置: ' + JSON.stringify(data), 'info'))
+            .catch(err => addSystemLog('获取配置列表错误: ' + err, 'error'));
+    }
+
+    function listConfigsByGroup() {
+        const group = document.getElementById('configGroup').value;
+        fetch(`/config/list?group=${group || ''}`)
+            .then(response => response.json())
+            .then(data => addSystemLog(`组[${group}]配置: ` + JSON.stringify(data), 'info'))
+            .catch(err => addSystemLog('按组查询配置错误: ' + err, 'error'));
+    }
+
+    function refreshConfig() {
+        const group = document.getElementById('refreshGroup').value;
+        if (!group) {
+            addSystemLog('请先输入配置组名', 'warn');
+            return;
+        }
+        fetch(`/config/refresh?group=${group}`)
+            .then(response => response.text())
+            .then(data => addSystemLog(data, 'info'))
+            .catch(err => addSystemLog('刷新配置错误: ' + err, 'error'));
+    }
+
+    function addConfig() {
+        const key = document.getElementById('addKey').value;
+        const value = document.getElementById('addValue').value;
+        if (!key || !value) {
+            addSystemLog('配置键和值不能为空', 'warn');
+            return;
+        }
+
+        const config = {
+            confKey: key,
+            confValue: value,
+            confGroup: document.getElementById('addGroup').value || '',
+            comment: document.getElementById('addComment').value || ''
+        };
+
+        fetch('/config/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        })
+        .then(response => response.text())
+        .then(data => addSystemLog(data, 'info'))
+        .catch(err => addSystemLog('添加配置错误: ' + err, 'error'));
+    }
+
+    function updateConfig() {
+        const key = document.getElementById('updateKey').value;
+        const value = document.getElementById('updateValue').value;
+        if (!key || !value) {
+            addSystemLog('配置键和新值不能为空', 'warn');
+            return;
+        }
+
+        const config = {
+            confKey: key,
+            confValue: value
+        };
+
+        fetch('/config/update', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        })
+        .then(response => response.text())
+        .then(data => addSystemLog(data, 'info'))
+        .catch(err => addSystemLog('更新配置错误: ' + err, 'error'));
+    }
+
+    function getName() {
+        fetch('/config/getName')
+            .then(response => response.text())
+            .then(data => addSystemLog('用户名: ' + data, 'info'))
+            .catch(err => addSystemLog('获取用户名错误: ' + err, 'error'));
+    }
+
+    function registerCallback() {
+        fetch('/config/register-callback')
+            .then(response => response.text())
+            .then(data => addSystemLog(data, 'info'))
+            .catch(err => addSystemLog('注册回调错误: ' + err, 'error'));
+    }
+
+    // 页面加载时自动连接
+    window.onload = function() {
+        addSystemLog('初始化动态配置控制台...', 'info');
+        connect();
+    };
+</script>
+</body>
+</html>
