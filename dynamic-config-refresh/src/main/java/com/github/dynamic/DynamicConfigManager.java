@@ -59,8 +59,12 @@ public class DynamicConfigManager implements EnvironmentAware, ApplicationContex
             String before = JSONUtil.toJsonStr(dynamicConfigs);
             boolean isUpdated = loadConfigFromDb(group);
             if (isUpdated) {
-                rebind(group);
                 log.info("增量配置刷新! 旧:{}, 新:{}", before, JSONUtil.toJsonStr(dynamicConfigs));
+                addPropertySource();
+                rebind(group);
+                // 添加配置刷新逻辑
+                applicationContext.getBean(ValueAnnotationProcessor.class)
+                           .reloadConfig(group);
             }
         }
     }

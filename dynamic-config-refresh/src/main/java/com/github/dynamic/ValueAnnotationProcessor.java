@@ -90,22 +90,23 @@ public class ValueAnnotationProcessor implements ApplicationContextAware, BeanFa
      *
      */
     public void processValueInject(String targetBean) {
-        if (targetBean == null) { // 对所有 bean 都执行
-            // 从 ApplicationContext 获取所有 beans
+        if (targetBean == null) {
             String[] allBeansName = applicationContext.getBeanDefinitionNames();
             for (String beanName : allBeansName) {
-                Object bean = applicationContext.getBean(beanName);
+                // 跳过对自身的处理
+                if (beanName.equals("valueAnnotationProcessor")) {
+                    continue;
+                }
 
+                Object bean = applicationContext.getBean(beanName);
                 try {
-                    // 循环构建元信息
                     ValueMetadata valueMetadata = buildMetadata(bean.getClass());
-                    // 调用处理注入的方法
                     valueMetadata.processInject(bean, beanName);
                 } catch (Throwable e) {
                     throw new RuntimeException(e);
                 }
             }
-        } else { // 对目标 bean 执行
+        } else {
             Object targetBeanObj = applicationContext.getBean(targetBean);
 
             try {

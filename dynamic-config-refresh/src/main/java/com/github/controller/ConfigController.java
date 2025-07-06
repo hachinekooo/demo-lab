@@ -6,12 +6,12 @@ import com.github.controller.dto.GlobalConfAddDTO;
 import com.github.controller.dto.GlobalConfUpdateDTO;
 import com.github.controller.vo.GlobalConfVO;
 import com.github.dynamic.DynamicConfigManager;
-import com.github.dynamic.ValueAnnotationProcessor;
 import com.github.mapper.GlobalConfMapper;
 import com.github.mapper.model.GlobalConfDO;
 import com.github.service.UserService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
@@ -29,10 +29,9 @@ public class ConfigController {
     private DynamicConfigManager dynamicConfigManager;
     @Autowired
     private GlobalConfMapper globalConfMapper;
-    @Autowired
-    private ValueAnnotationProcessor valueAnnotationProcessor;
 
     @Autowired
+    @Lazy
     private UserService userService;
 
     @GetMapping("/refresh")
@@ -60,7 +59,6 @@ public class ConfigController {
 
         String confGroup = conf.getConfGroup();
         dynamicConfigManager.reloadConfig(confGroup);
-        valueAnnotationProcessor.reloadConfig(confGroup);
         return "Added";
     }
 
@@ -75,7 +73,6 @@ public class ConfigController {
 
             String confGroup = conf.getConfGroup();
             dynamicConfigManager.reloadConfig(confGroup);
-            valueAnnotationProcessor.reloadConfig(confGroup);
         }
         return "Configuration updated successfully!";
     }
