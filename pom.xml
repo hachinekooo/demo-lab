@@ -9,10 +9,11 @@
     <version>1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <modules>
-        <module>distributed-lock</module>
-        <module>common</module>
-        <module>dynamic-config-refresh</module>
-        <module>echo-pattern</module>
+        <module>common</module> <!-- 公共模块 -->
+        <module>experiments/distributed-lock</module> <!-- 分布式锁实验模块 -->
+        <module>experiments/dynamic-config-refresh</module> <!-- 动态配置刷新实验模块 -->
+        <module>experiments/echo-pattern</module> <!-- 回响模式实验模块 -->
+        <module>services/blockchain</module> <!-- 区块链业务模块 -->
     </modules>
 
     <properties>
