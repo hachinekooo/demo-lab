@@ -8,3 +8,11 @@ spring:
 mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl #开启sql日志
+
+
+blockchain:
+  enabled: true
+  async: true
+  test:
+    mock-enabled: false
+    mock-failure-rate: 0.5
